@@ -4,97 +4,135 @@ import java.net.*;
 import java.io.*;
 import java.util.*;
 
-/**
- * This program is a server that takes connection requests on
- * the port specified by the constant LISTENING_PORT.  When a
- * connection is opened, the program should allow the client to send it messages. The messages should then 
- * become visible to all other clients.  The program will continue to receive
- * and process connections until it is killed (by a CONTROL-C,
- * for example). 
- * 
- * This version of the program creates a new thread for
- * every connection request.
- */
 public class ServerWithThreads {
 
-    public static final int LISTENING_PORT = 52000;
-    public static int numUsers;
+    public static final int LISTENING_PORT = 52008;
+    public static int numUsers = 0;
+
+    // Game state variables managed by the server
+    private static String player1Choice = null;
+    private static String player1Name = null;
+    private static String player2Choice = null;
+    private static String player2Name = null;
 
     public static void main(String[] args) {
-
-       
-
-        ServerSocket listener;  // Listens for incoming connections.
-        Socket connection;      // For communication with the connecting program.
-
-        /* Accept and process connections forever, or until some error occurs. */
+        ServerSocket listener;
+        Socket connection;
 
         try {
             listener = new ServerSocket(LISTENING_PORT);
-            System.out.println("Listening on port " + LISTENING_PORT);
+            System.out.println("RPS Server listening on port " + LISTENING_PORT);
             while (true) {
-                  connection = listener.accept();
-                  ConnectionHandler h = new ConnectionHandler(connection);
-                  h.start();
+                connection = listener.accept();
+                ConnectionHandler h = new ConnectionHandler(connection);
+                h.start();
             }
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             System.out.println("Sorry, the server has shut down.");
             System.out.println("Error:  " + e);
-            return;
+        }
+    }
+
+    public static synchronized void addUser() {
+        numUsers++;
+    }
+
+    // Synchronized method to handle choices as they arrive from threads
+    public static synchronized void processChoice(String playerName, String choice, ArrayList<ConnectionHandler> connectionList) {
+        // Assign choices to the first two players who arrive
+        if (player1Name == null) {
+            player1Name = playerName;
+            player1Choice = choice;
+            broadcast(playerName + " has made a choice!", connectionList);
+        } else if (player1Name.equals(playerName)) {
+            player1Choice = choice; // Allow player 1 to change mind before player 2 locks in
+        } else if (player2Name == null) {
+            player2Name = playerName;
+            player2Choice = choice;
+            broadcast(playerName + " has made a choice!", connectionList);
+        } else if (player2Name.equals(playerName)) {
+            player2Choice = choice; // Allow player 2 to change mind
         }
 
-    }  // end main()
-
-    public static void addUser(){
-        numUsers ++;
+        // Evaluate the game once both choices are present
+        if (player1Choice != null && player2Choice != null) {
+            String result = evaluateGame();
+            broadcast("\n--- GAME RESULT ---", connectionList);
+            broadcast(player1Name + " picked: " + player1Choice, connectionList);
+            broadcast(player2Name + " picked: " + player2Choice, connectionList);
+            broadcast("Outcome: " + result, connectionList);
+            broadcast("-------------------\nChoose rock, paper or scissors to play again!", connectionList);
+            
+            // Reset for the next round
+            player1Choice = null;
+            player1Name = null;
+            player2Choice = null;
+            player2Name = null;
+        }
     }
-    /**
-     *  Defines a thread that handles the connection with one
-     *  client.
-     */
+
+    private static String evaluateGame() {
+        if (player1Choice.equalsIgnoreCase(player2Choice)) {
+            return "It's a TIE!";
+        }
+        
+        boolean p1Wins = (player1Choice.equals("Rock") && player2Choice.equals("Scissors")) ||
+                         (player1Choice.equals("Paper") && player2Choice.equals("Rock")) ||
+                         (player1Choice.equals("Scissors") && player2Choice.equals("Paper"));
+
+        if (p1Wins) {
+            return player1Name + " WINS!";
+        } else {
+            return player2Name + " WINS!";
+        }
+    }
+
+    private static void broadcast(String msg, ArrayList<ConnectionHandler> connectionList) {
+        int i = 0;
+        while (i < connectionList.size()) {
+            try {
+                ConnectionHandler h = connectionList.get(i);
+                h.oos.writeObject(msg);
+                h.oos.flush();
+                i++;
+            } catch (Exception e) {
+                connectionList.remove(i);
+            }
+        }
+    }
+
     private static class ConnectionHandler extends Thread {
-        private static ArrayList<ConnectionHandler> connectionList;
+        private static ArrayList<ConnectionHandler> connectionList = new ArrayList<>();
         Socket client;
         ObjectOutputStream oos;
         ObjectInputStream ois;
-        public static int idNum;
+        public static int idNum = 1;
         String name;
 
         ConnectionHandler(Socket socket) {
             client = socket;
-            name = "User" + idNum;
-            idNum ++;
-            if(connectionList == null)
-                connectionList = new ArrayList<ConnectionHandler>();
+            name = "Player " + idNum;
+            idNum++;
             connectionList.add(this);
-            try{
+            try {
                 ois = new ObjectInputStream(client.getInputStream());
                 oos = new ObjectOutputStream(client.getOutputStream());
-                //buffered stuff goes here if you want
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-            catch(IOException e){}
         }
+
         public void run() {
-            String clientAddress = client.getInetAddress().toString();
-            
-            while(true) {
-                int i=0;
-	            try {
-	            	String message = (String)ois.readObject();
-                    while(i < connectionList.size()){
-                        ConnectionHandler h = connectionList.get(i);
-                        h.oos.writeObject(name + ": " + message);
-                        h.oos.flush();
-                        i++;
-                    }
-	            }
-	            catch (EOFException e){
-	                connectionList.remove(i);
-	            }
-                catch (Exception e){
-                    System.out.println("Cry");
+            try {
+                while (true) {
+                    String choice = (String) ois.readObject();
+                    processChoice(name, choice, connectionList);
                 }
+            } catch (EOFException e) {
+                connectionList.remove(this);
+            } catch (Exception e) {
+                System.out.println(name + " disconnected.");
+                connectionList.remove(this);
             }
         }
     }
