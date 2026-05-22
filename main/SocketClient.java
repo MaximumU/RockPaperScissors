@@ -20,7 +20,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 
-public class SocketClient {
+public class SocketClient{
    
    
     /*
@@ -78,6 +78,5 @@ public class SocketClient {
             String input = (String)ois.readObject();
             label.append(input + "\n");
         }
-      
     }
 }
