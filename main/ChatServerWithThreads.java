@@ -17,7 +17,7 @@ import java.util.*;
  */
 public class ChatServerWithThreads {
 
-    public static final int LISTENING_PORT = 52002;
+    public static final int LISTENING_PORT = 52000;
     public static int numUsers;
 
     public static void main(String[] args) {

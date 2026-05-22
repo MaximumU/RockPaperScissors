@@ -42,7 +42,7 @@ public class SocketClient{
         ChatServerWithThreads.addUser();
         int clientNum = ChatServerWithThreads.numUsers;
         InetAddress host = InetAddress.getLocalHost();
-        Socket socket = new Socket(host.getHostName(), 52002);
+        Socket socket = new Socket(host.getHostName(), 52000);
             //write to socket using ObjectOutputStream
         ObjectOutputStream   oos = new ObjectOutputStream(socket.getOutputStream());
         ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());
