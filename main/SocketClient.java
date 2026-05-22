@@ -19,29 +19,25 @@ import javax.swing.JTextArea;
 public class SocketClient {
 
    public static void main(String[] args) throws UnknownHostException, IOException, ClassNotFoundException, InterruptedException {
-       ServerWithThreads.addUser(); 
-       int clientNum = ServerWithThreads.numUsers;
-       
        InetAddress host = InetAddress.getLocalHost();
-       Socket socket = new Socket(host.getHostName(), 52008);
+       Socket socket = new Socket(host.getHostName(), 52004);
        
        ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
        ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());
        
-       // UI Setup
-       JFrame frame = new JFrame("RPS Client - Player " + clientNum);
+       String assignedName = (String) ois.readObject();
+       
+       JFrame frame = new JFrame("RPS Client - " + assignedName);
        frame.setLayout(new FlowLayout());
-       frame.setSize(340, 260);
+       frame.setSize(360, 260);
        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
        
-       // Display area initialization with your requested starting message
-       JTextArea label = new JTextArea(7, 26);
+       JTextArea label = new JTextArea(7, 28);
        label.setEditable(false);
        label.setBackground(Color.lightGray);
        label.setText("Choose rock, paper or scissors\n"); 
        frame.add(label);
        
-       // Game move buttons
        JPanel buttonPanel = new JPanel(new GridLayout(1, 3, 5, 5));
        JButton rockButton = new JButton("Rock");
        JButton paperButton = new JButton("Paper");
@@ -54,7 +50,6 @@ public class SocketClient {
        
        frame.setVisible(true);
 
-       // Unified action listener sending button moves straight to server
        ActionListener buttonListener = new ActionListener() {
            @Override
            public void actionPerformed(ActionEvent e) {
@@ -66,7 +61,7 @@ public class SocketClient {
                    oos.flush();
                } catch (IOException e1) {
                    e1.printStackTrace();
-               }
+                }
            }
        };
 
@@ -74,10 +69,21 @@ public class SocketClient {
        paperButton.addActionListener(buttonListener);
        scissorsButton.addActionListener(buttonListener);
        
-       // Listen forever for game announcements/results from server referee
        while(true){
            String input = (String)ois.readObject();
-           label.append(input + "\n");
+           
+           // FIX: Detect combined clear and outcome transmission
+           if (input != null && input.startsWith("[CLEAR]")) {
+               label.setText(""); // Wipe window text area
+               
+               // Split out and preserve the raw outcome message
+               String[] parts = input.split("\\|");
+               if (parts.length > 1) {
+                   label.append("Last Round: " + parts[1] + "\n\n");
+               }
+           } else {
+               label.append(input + "\n");
+           }
        }
    }
 }

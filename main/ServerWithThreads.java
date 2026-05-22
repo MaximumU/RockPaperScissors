@@ -6,10 +6,8 @@ import java.util.*;
 
 public class ServerWithThreads {
 
-    public static final int LISTENING_PORT = 52008;
-    public static int numUsers = 0;
+    public static final int LISTENING_PORT = 52004;
 
-    // Game state variables managed by the server
     private static String player1Choice = null;
     private static String player1Name = null;
     private static String player2Choice = null;
@@ -33,37 +31,41 @@ public class ServerWithThreads {
         }
     }
 
-    public static synchronized void addUser() {
-        numUsers++;
-    }
-
-    // Synchronized method to handle choices as they arrive from threads
     public static synchronized void processChoice(String playerName, String choice, ArrayList<ConnectionHandler> connectionList) {
-        // Assign choices to the first two players who arrive
         if (player1Name == null) {
             player1Name = playerName;
             player1Choice = choice;
-            broadcast(playerName + " has made a choice!", connectionList);
+            broadcast(playerName + " has made a choice", connectionList);
         } else if (player1Name.equals(playerName)) {
-            player1Choice = choice; // Allow player 1 to change mind before player 2 locks in
+            player1Choice = choice; 
         } else if (player2Name == null) {
             player2Name = playerName;
             player2Choice = choice;
-            broadcast(playerName + " has made a choice!", connectionList);
+            broadcast(playerName + " has made a choice", connectionList);
         } else if (player2Name.equals(playerName)) {
-            player2Choice = choice; // Allow player 2 to change mind
+            player2Choice = choice; 
         }
 
-        // Evaluate the game once both choices are present
         if (player1Choice != null && player2Choice != null) {
             String result = evaluateGame();
+            
+            // Send round summary
             broadcast("\n--- GAME RESULT ---", connectionList);
             broadcast(player1Name + " picked: " + player1Choice, connectionList);
             broadcast(player2Name + " picked: " + player2Choice, connectionList);
             broadcast("Outcome: " + result, connectionList);
-            broadcast("-------------------\nChoose rock, paper or scissors to play again!", connectionList);
+            broadcast("-------------------", connectionList);
             
-            // Reset for the next round
+            // FIX: Bundle the specific outcome with the clear signal string
+            String outcomeSummary = player1Name + " (" + player1Choice + ") vs " + player2Name + " (" + player2Choice + ") -> " + result;
+            broadcast("[CLEAR]|" + outcomeSummary, connectionList);
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            broadcast("Choose rock, paper or scissors to play again", connectionList);
+            
             player1Choice = null;
             player1Name = null;
             player2Choice = null;
@@ -103,20 +105,29 @@ public class ServerWithThreads {
 
     private static class ConnectionHandler extends Thread {
         private static ArrayList<ConnectionHandler> connectionList = new ArrayList<>();
+        private static final Object idLock = new Object();
+        public static int idNum = 1;
+        
         Socket client;
         ObjectOutputStream oos;
         ObjectInputStream ois;
-        public static int idNum = 1;
         String name;
 
         ConnectionHandler(Socket socket) {
             client = socket;
-            name = "Player " + idNum;
-            idNum++;
+            
+            synchronized(idLock) {
+                name = "Player " + idNum;
+                idNum++;
+            }
+            
             connectionList.add(this);
             try {
-                ois = new ObjectInputStream(client.getInputStream());
                 oos = new ObjectOutputStream(client.getOutputStream());
+                ois = new ObjectInputStream(client.getInputStream());
+                
+                oos.writeObject(name);
+                oos.flush();
             } catch (IOException e) {
                 e.printStackTrace();
             }
