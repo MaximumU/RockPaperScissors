@@ -15,7 +15,7 @@ import java.util.*;
  * This version of the program creates a new thread for
  * every connection request.
  */
-public class ChatServerWithThreads {
+public class ServerWithThreads {
 
     public static final int LISTENING_PORT = 52000;
     public static int numUsers;
